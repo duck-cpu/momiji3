@@ -1,2 +1,4 @@
 .env
 userRollData.json
+bin/
+obj/
