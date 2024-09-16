@@ -1,9 +1,6 @@
-﻿using System;
-using System.Threading.Tasks;
-using Discord;
+﻿using Discord;
 using Discord.WebSocket;
 using DotNetEnv;
-using System.Net.Http;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 
@@ -19,7 +16,8 @@ namespace DiscordBot
 
             Console.CancelKeyPress += (sender, eventArgs) =>
             {
-                bot.SaveData(); // Save data when the bot is stopping
+                //save data when the bot is stopping
+                bot.SaveData();
             };
 
             await Task.Delay(-1);
@@ -45,7 +43,6 @@ namespace DiscordBot
             _client.MessageReceived += MessageReceivedAsync;
             _httpClient = new HttpClient();
         }
-
         //initialize bot
         public async Task InitializeAsync()
         {
@@ -65,7 +62,8 @@ namespace DiscordBot
             await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
 
-            LoadData(); // Load data when bot starts
+            // loads data when bot starts
+            LoadData();
         }
         //prints logs to console
         private Task LogAsync(LogMessage log)
@@ -87,24 +85,30 @@ namespace DiscordBot
             //allows user to roll for stars
             if (message.Content.StartsWith(">roll"))
             {
-                int rarity = GetRollResult();
+                WaifuRollResult result = GetRollResult();
                 string imageUrl = await GetAnimeGirl();
                 string rollName = GetRandomRollName();
+                Element element = GetRandomElement();  //add random element selection
 
-                // save roll result for user
-                SaveRollResult(message.Author.Id, rarity, imageUrl, rollName);
-
-                // create an embed with the roll result and image, makes it prettier
+                //save roll result for user
+                SaveRollResult(message.Author.Id, result.StarRating, imageUrl, rollName, element);
+                //get the element's emoji
+                string elementEmoji = GetElementEmoji(element);
+                //create an embed with the roll result and image, makes it prettier
                 var embed = new EmbedBuilder()
                 {
-                    Title = "🪙 〃￣ω￣〃ゞ \n\nLUCKY GET ", // Title of the embed
-                    Description = $"You rolled a **{rarity}★** {rollName}!!", // Bold text for rarity
-                    Color = Color.Gold, // Color of the embed sidebar
-                    ImageUrl = imageUrl, // Image URL
+                    //title of the embed
+                    Title = "🪙 〃￣ω￣〃ゞ\nLUCKY GET ",
+                    //bold text for rarity
+                    Description = $"You rolled a **{result.StarRating}★** **{elementEmoji}** **{rollName}**!!",
+                    //color of the embed sidebar
+                    Color = Color.Gold,
+                    //image URL
+                    ImageUrl = imageUrl,
                     Footer = new EmbedFooterBuilder { Text = "(ノ= ⩊ = )ノ congratulations ✨ " } // Optional footer text        
                 }.Build();
 
-                // send the embed message
+                //send the embed message
                 if (string.IsNullOrEmpty(imageUrl))
                 {
                     await message.Channel.SendMessageAsync("Sorry, I couldn't fetch an anime girl image right now.");
@@ -114,23 +118,27 @@ namespace DiscordBot
                     await message.Channel.SendMessageAsync(embed: embed);
                 }
             }
+            //returns users completed rolls from database
             if (message.Content.StartsWith(">myrolls"))
             {
                 var rolls = GetUserRolls(message.Author.Id);
+
                 if (rolls.Any())
                 {
                     foreach (var roll in rolls)
                     {
-                        var embedBuilder = new EmbedBuilder
-                        {
-                            Title = "╮(︶︿︶)╭ YOUR HISTORY",
-                            Description = $"You rolled a **{roll.Rarity}★** **{roll.RollName}**",
-                            Color = Color.Green,
-                            ImageUrl = roll.ImageUrl,
-                            Footer = new EmbedFooterBuilder { Text = "Roll History" }
-                        };
+                        //get the emoji for the element
+                        string elementEmoji = GetElementEmoji(roll.Element);
 
-                        var embed = embedBuilder.Build();
+                        //create an embed for each roll, showing rarity, roll name, and element emoji
+                        var embed = new EmbedBuilder
+                        {
+                            Title = "╮(︶︿︶)╭ \nHISTORY",
+                            Description = $"I'm a **{roll.Rarity}★** **{elementEmoji}** **{roll.RollName}**!!",
+                            Color = Color.Green,
+                            ImageUrl = roll.ImageUrl
+                        }.Build();
+
                         await message.Channel.SendMessageAsync(embed: embed);
                     }
                 }
@@ -140,41 +148,38 @@ namespace DiscordBot
                 }
             }
         }
-        private int GetRollResult()
+        private WaifuRollResult GetRollResult()
         {
             Random random = new Random();
-
-            int roll = random.Next(1, 101); // Generate a random number between 1 and 100
-
-            return roll switch
+            //generate a random number between 1 and 100
+            int roll = random.Next(1, 101);
+            int starRating = roll switch
             {
-                <= 40 => 1,   // 40% chance for 1-star
-                <= 65 => 2,   // 25% chance for 2-star
-                <= 80 => 3,   // 15% chance for 3-star
-                <= 90 => 4,   // 10% chance for 4-star
-                <= 95 => 5,   // 5% chance for 5-star
-                <= 98 => 6,   // 3% chance for 6-star
-                <= 99 => 7,   // 1% chance for 7-star
-                _ => 10       // 1% chance for 10-star
+                <= 40 => 1,   //40% chance for 1-star
+                <= 65 => 2,   //25% chance for 2-star
+                <= 80 => 3,   //15% chance for 3-star
+                <= 90 => 4,   //10% chance for 4-star
+                <= 95 => 5,   //5% chance for 5-star
+                <= 98 => 6,   //3% chance for 6-star
+                <= 99 => 7,   //1% chance for 7-star
+                _ => 10       //1% chance for 10-star
+            };
+
+            //get random element
+            Element element = (Element)random.Next(0, 3); //randomly choose between Water (0), Fire (1), Grass (2)
+            return new WaifuRollResult
+            {
+                StarRating = starRating,
+                WaifuElement = element
             };
         }
+        //gets pic of waifu from api
         private async Task<string> GetAnimeGirl()
         {
             string apiUrl = "https://api.waifu.pics/sfw/waifu";
             var response = await _httpClient.GetStringAsync(apiUrl);
             var json = JObject.Parse(response);
             return json["url"]?.ToString() ?? "https://example.com/default-image.jpg";
-        }
-        public class UserRollData
-        {
-            public ulong UserId { get; set; }
-            public List<UserRollEntry> RollEntries { get; set; } = new List<UserRollEntry>();
-        }
-        public class UserRollEntry
-        {
-            public int Rarity { get; set; }
-            public required string ImageUrl { get; set; }
-            public required string RollName { get; set; }
         }
         private const string DataFilePath = "userRollData.json";
         private List<UserRollData> _userRollData = new List<UserRollData>();
@@ -196,7 +201,7 @@ namespace DiscordBot
             var userRollData = _userRollData.FirstOrDefault(d => d.UserId == userId);
             return userRollData?.RollEntries ?? new List<UserRollEntry>();
         }
-        private void SaveRollResult(ulong userId, int rollResult, string imageUrl, string rollName)
+        private void SaveRollResult(ulong userId, int rarity, string imageUrl, string rollName, Element element)
         {
             var userRollData = _userRollData.FirstOrDefault(d => d.UserId == userId);
             if (userRollData == null)
@@ -207,19 +212,66 @@ namespace DiscordBot
 
             userRollData.RollEntries.Add(new UserRollEntry
             {
-                Rarity = rollResult,
+                Rarity = rarity,
                 ImageUrl = imageUrl,
-                RollName = rollName
+                RollName = rollName,
+                Element = element
             });
 
             SaveData();
         }
         private string GetRandomRollName()
         {
-            //will change to random names from api later
+            //will change to random names from an api later
             var names = new[] { "Lucky", "Starry", "Shiny", "Mystic", "Glowing", "Radiant", "Sparkling", "Celestial", "Dazzling", "Epic" };
             Random random = new Random();
             return names[random.Next(names.Length)];
+        }
+        public enum Element
+        {
+            Water,
+            Fire,
+            Grass
+        }
+        public static string GetElementEmoji(Element element)
+        {
+            return element switch
+            {
+                Element.Water => "💧",   // Water element emoji
+                Element.Fire => "🔥",    // Fire element emoji
+                Element.Grass => "🍃",   // Grass element emoji
+                _ => ""  // Default to an empty string if something goes wrong
+            };
+        }
+        private Element GetRandomElement()
+        {
+            Random random = new Random();
+            int roll = random.Next(0, 3);  //generate a random number between 0 and 2
+
+            return roll switch
+            {
+                0 => Element.Water,
+                1 => Element.Fire,
+                2 => Element.Grass,
+                _ => Element.Water //fallback to Water as default
+            };
+        }
+        public class UserRollData
+        {
+            public ulong UserId { get; set; }
+            public List<UserRollEntry> RollEntries { get; set; } = new List<UserRollEntry>();
+        }
+        public class UserRollEntry
+        {
+            public int Rarity { get; set; }
+            public required string ImageUrl { get; set; }
+            public required string RollName { get; set; }
+            public required Element Element { get; set; }
+        }
+        public class WaifuRollResult
+        {
+            public int StarRating { get; set; }
+            public Element WaifuElement { get; set; }
         }
     }
 }
