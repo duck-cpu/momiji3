@@ -82,12 +82,12 @@ namespace DiscordBot
                 await message.Channel.SendMessageAsync($"Hello, {message.Author.Username}!");
             }
 
-            //allows user to roll for stars
+            //allows user to roll for a waifu
             if (message.Content.StartsWith(">roll"))
             {
                 WaifuRollResult result = GetRollResult();
                 string imageUrl = await GetAnimeGirl();
-                string rollName = GetRandomRollName();
+                string rollName = await GetRandomRollName();
                 Element element = GetRandomElement();  //add random element selection
 
                 //save roll result for user
@@ -98,9 +98,13 @@ namespace DiscordBot
                 var embed = new EmbedBuilder()
                 {
                     //title of the embed
-                    Title = "🪙 〃￣ω￣〃ゞ\nLUCKY GET ",
+                    Title = "🪙 〃￣ω￣〃ゞ\n   LUCKY GET ",
                     //bold text for rarity
-                    Description = $"You rolled a **{result.StarRating}★** **{elementEmoji}** **{rollName}**!!",
+                    Description = $"You rolled a **{result.StarRating}★** **{elementEmoji}** type **{rollName}**!!\n"
+                                    + $"she has...\n"
+                                    + $"**ATK:** {result.Attack}\n"
+                                    + $"**DEF:** {result.Defense}\n"
+                                    + $"**SPD:** {result.Speed}",
                     //color of the embed sidebar
                     Color = Color.Gold,
                     //image URL
@@ -133,8 +137,11 @@ namespace DiscordBot
                         //create an embed for each roll, showing rarity, roll name, and element emoji
                         var embed = new EmbedBuilder
                         {
-                            Title = "╮(︶︿︶)╭ \nHISTORY",
-                            Description = $"I'm a **{roll.Rarity}★** **{elementEmoji}** **{roll.RollName}**!!",
+                            Title = $"╮(︶︿︶)╭ \n    *{roll.RollName.ToUpper()}*",
+                            Description = $"I'm a **{roll.Rarity}★** **{elementEmoji}** type with..\n"
+                                        + $"**ATK:** {roll.Attack}\n"
+                                        + $"**DEF:** {roll.Defense}\n"
+                                        + $"**SPD:** {roll.Speed}",
                             Color = Color.Green,
                             ImageUrl = roll.ImageUrl
                         }.Build();
@@ -167,10 +174,18 @@ namespace DiscordBot
 
             //get random element
             Element element = (Element)random.Next(0, 3); //randomly choose between Water (0), Fire (1), Grass (2)
+
+            int attack = random.Next(1, 101);
+            int defense = random.Next(1, 101);
+            int speed = random.Next(1, 101);
+
             return new WaifuRollResult
             {
                 StarRating = starRating,
-                WaifuElement = element
+                WaifuElement = element,
+                Attack = attack,
+                Defense = defense,
+                Speed = speed
             };
         }
         //gets pic of waifu from api
@@ -210,22 +225,33 @@ namespace DiscordBot
                 _userRollData.Add(userRollData);
             }
 
+            var rollResult = GetRollResult();
+
             userRollData.RollEntries.Add(new UserRollEntry
             {
                 Rarity = rarity,
                 ImageUrl = imageUrl,
                 RollName = rollName,
-                Element = element
+                Element = element,
+                Attack = rollResult.Attack,
+                Defense = rollResult.Defense,
+                Speed = rollResult.Speed
             });
 
             SaveData();
         }
-        private string GetRandomRollName()
+        private async Task<string> GetRandomRollName()
         {
-            //will change to random names from an api later
-            var names = new[] { "Lucky", "Starry", "Shiny", "Mystic", "Glowing", "Radiant", "Sparkling", "Celestial", "Dazzling", "Epic" };
-            Random random = new Random();
-            return names[random.Next(names.Length)];
+            var adjective = await GetRandomWord("adjective");
+            var noun = await GetRandomWord("noun");
+            return $"{adjective} {noun}";
+        }
+        private async Task<string> GetRandomWord(string type)
+        {
+            var apiUrl = $"https://random-word-api.herokuapp.com/all";
+            var response = await _httpClient.GetStringAsync(apiUrl);
+            var json = JArray.Parse(response);
+            return json.First?.ToString() ?? "Unknown";
         }
         public enum Element
         {
@@ -267,11 +293,17 @@ namespace DiscordBot
             public required string ImageUrl { get; set; }
             public required string RollName { get; set; }
             public required Element Element { get; set; }
+            public int Attack { get; set; }
+            public int Defense { get; set; }
+            public int Speed { get; set; }
         }
         public class WaifuRollResult
         {
             public int StarRating { get; set; }
             public Element WaifuElement { get; set; }
+            public int Attack { get; set; }
+            public int Defense { get; set; }
+            public int Speed { get; set; }
         }
     }
 }
