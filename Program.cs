@@ -2,9 +2,8 @@
 using Discord.WebSocket;
 using DotNetEnv;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
 
-namespace DiscordBot
+namespace momiji3
 {
     class Program
     {
@@ -13,13 +12,6 @@ namespace DiscordBot
             //creates new Bot, and keeps the program running (infinite delay)
             var bot = new Bot();
             await bot.InitializeAsync();
-
-            Console.CancelKeyPress += (sender, eventArgs) =>
-            {
-                //save data when the bot is stopping
-                bot.SaveData();
-            };
-
             await Task.Delay(-1);
         }
     }
@@ -52,18 +44,12 @@ namespace DiscordBot
             //retrieve token from .env
             string token = Environment.GetEnvironmentVariable("DISCORD_BOT_TOKEN") ?? throw new InvalidOperationException("Bot token is not set in the environment variables."); ;
 
-            //error if token is empty
-            if (string.IsNullOrEmpty(token))
-            {
-                Console.WriteLine("Token not found! Make sure it's set in your .env file.");
-                return;
-            }
             //logs into Discord using token and starts bot
             await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
 
-            // loads data when bot starts
-            LoadData();
+            //loads data when bot starts
+            Database.InitializeDatabase();
         }
         //prints logs to console
         private Task LogAsync(LogMessage log)
@@ -91,7 +77,7 @@ namespace DiscordBot
                 Element element = GetRandomElement();  //add random element selection
 
                 //save roll result for user
-                SaveRollResult(message.Author.Id, result.StarRating, imageUrl, rollName, element);
+                Database.InsertUserRoll(message.Author.Id.ToString(), result.StarRating, imageUrl, rollName, element.ToString(), result.Attack, result.Defense, result.Speed);
                 //get the element's emoji
                 string elementEmoji = GetElementEmoji(element);
                 //create an embed with the roll result and image, makes it prettier
@@ -125,7 +111,7 @@ namespace DiscordBot
             //returns users completed rolls from database
             if (message.Content.StartsWith(">myrolls"))
             {
-                var rolls = GetUserRolls(message.Author.Id);
+                var rolls = Database.GetUserRolls(message.Author.Id.ToString());
 
                 if (rolls.Any())
                 {
@@ -197,49 +183,6 @@ namespace DiscordBot
             return json["url"]?.ToString() ?? "https://example.com/default-image.jpg";
         }
         private const string DataFilePath = "userRollData.json";
-        private List<UserRollData> _userRollData = new List<UserRollData>();
-        public void SaveData()
-        {
-            var json = JsonConvert.SerializeObject(_userRollData, Formatting.Indented);
-            File.WriteAllText(DataFilePath, json);
-        }
-        private void LoadData()
-        {
-            if (File.Exists(DataFilePath))
-            {
-                var json = File.ReadAllText(DataFilePath);
-                _userRollData = JsonConvert.DeserializeObject<List<UserRollData>>(json) ?? new List<UserRollData>();
-            }
-        }
-        private List<UserRollEntry> GetUserRolls(ulong userId)
-        {
-            var userRollData = _userRollData.FirstOrDefault(d => d.UserId == userId);
-            return userRollData?.RollEntries ?? new List<UserRollEntry>();
-        }
-        private void SaveRollResult(ulong userId, int rarity, string imageUrl, string rollName, Element element)
-        {
-            var userRollData = _userRollData.FirstOrDefault(d => d.UserId == userId);
-            if (userRollData == null)
-            {
-                userRollData = new UserRollData { UserId = userId };
-                _userRollData.Add(userRollData);
-            }
-
-            var rollResult = GetRollResult();
-
-            userRollData.RollEntries.Add(new UserRollEntry
-            {
-                Rarity = rarity,
-                ImageUrl = imageUrl,
-                RollName = rollName,
-                Element = element,
-                Attack = rollResult.Attack,
-                Defense = rollResult.Defense,
-                Speed = rollResult.Speed
-            });
-
-            SaveData();
-        }
         private async Task<string> GetRandomRollName()
         {
             try
@@ -265,13 +208,6 @@ namespace DiscordBot
                 Console.WriteLine($"Request error: {ex.Message}");
                 return "DEFAULT NAME";
             }
-        }
-        private async Task<string> GetRandomWord(string type)
-        {
-            var apiUrl = $"https://random-word-api.herokuapp.com/all";
-            var response = await _httpClient.GetStringAsync(apiUrl);
-            var json = JArray.Parse(response);
-            return json.First?.ToString() ?? "Unknown";
         }
         public enum Element
         {
