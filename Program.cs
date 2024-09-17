@@ -98,10 +98,11 @@ namespace DiscordBot
                 var embed = new EmbedBuilder()
                 {
                     //title of the embed
-                    Title = "🪙 〃￣ω￣〃ゞ\n   LUCKY GET ",
+                    Title = "〃￣ω￣〃ゞ\nWAIFU GET ",
                     //bold text for rarity
-                    Description = $"You rolled a **{result.StarRating}★** **{elementEmoji}** type **{rollName}**!!\n"
-                                    + $"she has...\n"
+                    Description = $"You rolled a \n **{result.StarRating}**★ **{elementEmoji}** type **\"{rollName}\"** !!\n"
+                                    + $"     she has...\n"
+                                    + $"\n"
                                     + $"**ATK:** {result.Attack}\n"
                                     + $"**DEF:** {result.Defense}\n"
                                     + $"**SPD:** {result.Speed}",
@@ -109,7 +110,6 @@ namespace DiscordBot
                     Color = Color.Gold,
                     //image URL
                     ImageUrl = imageUrl,
-                    Footer = new EmbedFooterBuilder { Text = "(ノ= ⩊ = )ノ congratulations ✨ " } // Optional footer text        
                 }.Build();
 
                 //send the embed message
@@ -242,9 +242,29 @@ namespace DiscordBot
         }
         private async Task<string> GetRandomRollName()
         {
-            var adjective = await GetRandomWord("adjective");
-            var noun = await GetRandomWord("noun");
-            return $"{adjective} {noun}";
+            try
+            {
+                //base API URL
+                string baseUrl = "https://random-word-form.herokuapp.com";
+
+                //fetch random adjective
+                string adjectiveUrl = $"{baseUrl}/random/adjective";
+                var adjectiveResponse = await _httpClient.GetStringAsync(adjectiveUrl);
+                var adjective = JArray.Parse(adjectiveResponse)[0].ToString();
+
+                //fetch random noun
+                string nounUrl = $"{baseUrl}/random/noun";
+                var nounResponse = await _httpClient.GetStringAsync(nounUrl);
+                var noun = JArray.Parse(nounResponse)[0].ToString();
+
+                //combine adjective and noun to form the roll name
+                return $"{adjective.ToUpper()} {noun.ToUpper()}";
+            }
+            catch (HttpRequestException ex)
+            {
+                Console.WriteLine($"Request error: {ex.Message}");
+                return "DEFAULT NAME";
+            }
         }
         private async Task<string> GetRandomWord(string type)
         {
