@@ -1,9 +1,9 @@
 # good stuff in here
 
 <br/>
-## todo:
+##todo:
 <br/>
-add stats
+~~add stats~~
 <br/>
 make them battle
 <br/>
