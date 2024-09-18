@@ -62,22 +62,48 @@ namespace momiji3
         {
             if (message.Author.IsBot) return;
 
+            //ensures commands with this tag can only be used in servers
+            var guild = (message.Channel as IGuildChannel)?.Guild;
+            if (guild == null)
+            {
+                await message.Channel.SendMessageAsync("This command can only be used in a server.");
+                return;
+            }
+
+            //initialize munny balance
+            await InitializeUserBalance(message.Author.Id);
+
             //returns users name
             if (message.Content.StartsWith(">hello"))
             {
                 await message.Channel.SendMessageAsync($"Hello, {message.Author.Username}!");
             }
-
             //allows user to roll for a waifu
             if (message.Content.StartsWith(">roll"))
             {
+                string userId = message.Author.Id.ToString();
+                const int rollCost = 100;
+                //check if user has enough munny
+                if (Database.GetUserBalance(userId) < rollCost)
+                {
+                    await message.Channel.SendMessageAsync("You do not have enough munny to roll. You need at least 100 munny.");
+                    return;
+                }
+
+                //deduct munny
+                if (!Database.DeductUserBalance(userId, rollCost))
+                {
+                    await message.Channel.SendMessageAsync("Failed to deduct munny. Please try again.");
+                    return;
+                }
+
                 WaifuRollResult result = GetRollResult();
                 string imageUrl = await GetAnimeGirl();
                 string rollName = await GetRandomRollName();
                 Element element = GetRandomElement();  //add random element selection
 
                 //save roll result for user
-                Database.InsertUserRoll(message.Author.Id.ToString(), result.StarRating, imageUrl, rollName, element.ToString(), result.Attack, result.Defense, result.Speed);
+                Database.InsertUserRoll(message.Author.Id.ToString(), result.StarRating, imageUrl, rollName, element.ToString(), result.Attack, result.Defense, result.Speed, message.Author.Id.ToString());
                 //get the element's emoji
                 string elementEmoji = GetElementEmoji(element);
                 //create an embed with the roll result and image, makes it prettier
@@ -111,7 +137,7 @@ namespace momiji3
             //returns users completed rolls from database
             if (message.Content.StartsWith(">myrolls"))
             {
-                var rolls = Database.GetUserRolls(message.Author.Id.ToString());
+                var rolls = Database.GetUserRolls(message.Author.Id.ToString(), guild.Id.ToString());
 
                 if (rolls.Any())
                 {
@@ -120,16 +146,25 @@ namespace momiji3
                         //get the emoji for the element
                         string elementEmoji = GetElementEmoji(roll.Element);
 
+                        //TODO: define this variable somewhere else, used again in a different function
+                        //get the user by their ID
+                        var owner = await guild.GetUserAsync(ulong.Parse(roll.OwnerId));
+                        string ownerName = owner?.Nickname ?? owner?.Username ?? "Unknown";
+
                         //create an embed for each roll, showing rarity, roll name, and element emoji
                         var embed = new EmbedBuilder
                         {
-                            Title = $"╮(︶︿︶)╭ \n    *{roll.RollName.ToUpper()}*",
+                            Title = $"*{roll.Id}*\n    *{roll.RollName.ToUpper()}*",
                             Description = $"I'm a **{roll.Rarity}★** **{elementEmoji}** type with..\n"
                                         + $"**ATK:** {roll.Attack}\n"
                                         + $"**DEF:** {roll.Defense}\n"
                                         + $"**SPD:** {roll.Speed}",
                             Color = Color.Green,
-                            ImageUrl = roll.ImageUrl
+                            ImageUrl = roll.ImageUrl,
+                            Footer = new EmbedFooterBuilder()
+                            {
+                                Text = $"owned by {ownerName}"
+                            }
                         }.Build();
 
                         await message.Channel.SendMessageAsync(embed: embed);
@@ -139,6 +174,56 @@ namespace momiji3
                 {
                     await message.Channel.SendMessageAsync("You don't have any roll history.");
                 }
+            }
+            if (message.Content.StartsWith(">query"))
+            {
+                string queryParams = message.Content.Substring(">query".Length).Trim();
+
+                if (string.IsNullOrWhiteSpace(queryParams))
+                {
+                    await message.Channel.SendMessageAsync("Please provide a query parameter.");
+                    return;
+                }
+
+                var queryResult = Database.QueryDatabase(queryParams);
+
+                if (queryResult.Any())
+                {
+                    foreach (var entry in queryResult)
+                    {
+                        string elementEmoji = GetElementEmoji(entry.Element);
+
+                        //TODO: define this variable somewhere else, used again in a different function
+                        var owner = await guild.GetUserAsync(ulong.Parse(entry.OwnerId));
+                        string ownerName = owner?.Nickname ?? owner?.Username ?? "Unknown";
+
+                        var embed = new EmbedBuilder
+                        {
+                            Title = $"╮(︶︿︶)╭ \n    *{entry.RollName.ToUpper()}*",
+                            Description = $"I'm a **{entry.Rarity}★** **{elementEmoji}** type with..\n"
+                                        + $"**ATK:** {entry.Attack}\n"
+                                        + $"**DEF:** {entry.Defense}\n"
+                                        + $"**SPD:** {entry.Speed}",
+                            Color = Color.Blue,
+                            ImageUrl = entry.ImageUrl,
+                            Footer = new EmbedFooterBuilder()
+                            {
+                                Text = $"owned by {ownerName}"
+                            }
+                        }.Build();
+
+                        await message.Channel.SendMessageAsync(embed: embed);
+                    }
+                }
+                else
+                {
+                    await message.Channel.SendMessageAsync("No results found for your query.");
+                }
+            }
+            if (message.Content.StartsWith(">balance"))
+            {
+                int balance = Database.GetUserBalance(message.Author.Id.ToString());
+                await message.Channel.SendMessageAsync($"You currently have **{balance}** munny.");
             }
         }
         private WaifuRollResult GetRollResult()
@@ -174,6 +259,14 @@ namespace momiji3
                 Speed = speed
             };
         }
+        private async Task InitializeUserBalance(ulong userId)
+        {
+            if (Database.GetUserBalance(userId.ToString()) == 0)
+            {
+                //ensure this is awaited if it is an asynchronous method
+                await Task.Run(() => Database.SetUserBalance(userId.ToString(), 500));
+            }
+        }
         //gets pic of waifu from api
         private async Task<string> GetAnimeGirl()
         {
@@ -182,7 +275,6 @@ namespace momiji3
             var json = JObject.Parse(response);
             return json["url"]?.ToString() ?? "https://example.com/default-image.jpg";
         }
-        private const string DataFilePath = "userRollData.json";
         private async Task<string> GetRandomRollName()
         {
             try
@@ -245,6 +337,7 @@ namespace momiji3
         }
         public class UserRollEntry
         {
+            public int Id { get; set; }
             public int Rarity { get; set; }
             public required string ImageUrl { get; set; }
             public required string RollName { get; set; }
@@ -252,6 +345,7 @@ namespace momiji3
             public int Attack { get; set; }
             public int Defense { get; set; }
             public int Speed { get; set; }
+            public required string OwnerId { get; set; }
         }
         public class WaifuRollResult
         {
