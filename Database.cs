@@ -1,4 +1,6 @@
 using Microsoft.Data.Sqlite;
+using momiji3.Models;
+using momiji3.Utility;
 
 namespace momiji3
 {
@@ -76,9 +78,9 @@ namespace momiji3
         }
 
         //retrieve all rolls for a specific user
-        public static List<Bot.UserRollEntry> GetUserRolls(string userId, string GuildId)
+        public static List<UserRollEntry> GetUserRolls(string userId, string GuildId)
         {
-            var rolls = new List<Bot.UserRollEntry>();
+            var rolls = new List<UserRollEntry>();
 
             using (var connection = new SqliteConnection($"Data Source={DbFilePath}"))
             {
@@ -95,13 +97,13 @@ namespace momiji3
                     {
                         while (reader.Read())
                         {
-                            rolls.Add(new Bot.UserRollEntry
+                            rolls.Add(new UserRollEntry
                             {
                                 Id = reader.GetInt32(0),
                                 Rarity = reader.GetInt32(2),
                                 ImageUrl = reader.GetString(3),
                                 RollName = reader.GetString(4),
-                                Element = (Bot.Element)Enum.Parse(typeof(Bot.Element), reader.GetString(5)),
+                                Element = (Element)Enum.Parse(typeof(Element), reader.GetString(5)),
                                 Attack = reader.GetInt32(6),
                                 Defense = reader.GetInt32(7),
                                 Speed = reader.GetInt32(8),
@@ -116,9 +118,9 @@ namespace momiji3
 
             return rolls;
         }
-        public static List<Bot.UserRollEntry> QueryDatabase(string queryParams)
+        public static List<UserRollEntry> QueryDatabase(string queryParams)
         {
-            var results = new List<Bot.UserRollEntry>();
+            var results = new List<UserRollEntry>();
 
             using (var connection = new SqliteConnection($"Data Source={DbFilePath}"))
             {
@@ -140,13 +142,13 @@ namespace momiji3
                     {
                         while (reader.Read())
                         {
-                            results.Add(new Bot.UserRollEntry
+                            results.Add(new UserRollEntry
                             {
                                 Id = reader.GetInt32(0),
                                 Rarity = reader.GetInt32(2),
                                 ImageUrl = reader.GetString(3),
                                 RollName = reader.GetString(4),
-                                Element = (Bot.Element)Enum.Parse(typeof(Bot.Element), reader.GetString(5)),
+                                Element = (Element)Enum.Parse(typeof(Element), reader.GetString(5)),
                                 Attack = reader.GetInt32(6),
                                 Defense = reader.GetInt32(7),
                                 Speed = reader.GetInt32(8),
