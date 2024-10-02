@@ -1,9 +1,6 @@
 using Discord;
 using Discord.WebSocket;
 using DotNetEnv;
-using Newtonsoft.Json.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
 using momiji3.Models;
 using momiji3.Utility;
 
@@ -56,6 +53,12 @@ namespace momiji3
             //initialize munny balance
             await InitializeUserBalance(message.Author.Id);
 
+            //initialize roll results
+            RollResult result = GetRollResult();
+
+            //create display of stars for rolls
+            string starDisplay = BotHelper.GetStars(result.StarRating);
+
             //returns users name
             if (message.Content.StartsWith(">hello"))
             {
@@ -80,7 +83,6 @@ namespace momiji3
                     return;
                 }
 
-                RollResult result = GetRollResult();
                 string imageUrl = await BotHelper.GetChar(_httpClient);
                 string rollName = await BotHelper.GetRandomRollName(_httpClient);
 
@@ -97,9 +99,8 @@ namespace momiji3
                     //title of the embed
                     Title = "LUCKY GET",
                     //bold text for rarity
-                    Description = $"You rolled a \n **{result.StarRating}**★ **{elementEmoji}** type **\"{rollName}\"** !!\n"
-                                    + $"     it has...\n"
-                                    + $"\n"
+                    Description = $"\n **{starDisplay}** \n \n **{rollName}**!!\n"
+                                    + $"**{elementEmoji}** \n"
                                     + $"**ATK:** {result.Attack}\n"
                                     + $"**DEF:** {result.Defense}\n"
                                     + $"**SPD:** {result.Speed}",
@@ -131,8 +132,6 @@ namespace momiji3
                         //get the emoji for the element
                         string elementEmoji = BotHelper.GetElementEmoji(roll.Element);
 
-                        //TODO: define this variable somewhere else, used again in a different function
-                        //get the user by their ID
                         var owner = await guild.GetUserAsync(ulong.Parse(roll.OwnerId));
                         string ownerName = owner?.Nickname ?? owner?.Username ?? "Unknown";
 
@@ -140,7 +139,7 @@ namespace momiji3
                         var embed = new EmbedBuilder
                         {
                             Title = $"*{roll.Id}*\n    *{roll.RollName.ToUpper()}*",
-                            Description = $"I'm a **{roll.Rarity}★** **{elementEmoji}** type with..\n"
+                            Description = $"I'm a **{starDisplay}★** **{elementEmoji}** type with..\n"
                                         + $"**ATK:** {roll.Attack}\n"
                                         + $"**DEF:** {roll.Defense}\n"
                                         + $"**SPD:** {roll.Speed}",
@@ -177,8 +176,6 @@ namespace momiji3
                     foreach (var entry in queryResult)
                     {
                         string elementEmoji = BotHelper.GetElementEmoji(entry.Element);
-
-                        //TODO: define this variable somewhere else, used again in a different function
                         var owner = await guild.GetUserAsync(ulong.Parse(entry.OwnerId));
                         string ownerName = owner?.Nickname ?? owner?.Username ?? "Unknown";
 

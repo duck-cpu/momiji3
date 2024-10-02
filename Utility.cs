@@ -1,6 +1,4 @@
 using Newtonsoft.Json.Linq;
-using System.Net.Http;
-using System.Threading.Tasks;
 using momiji3.Models;
 
 namespace momiji3.Utility
@@ -46,6 +44,32 @@ namespace momiji3.Utility
                 Element.Grass => "🍃",
                 _ => ""
             };
+        }
+        public static string GetStars(int starRating)
+        {
+            string starSymbol = "";
+            if (starRating >= 1 && starRating <= 3)
+            {
+                starSymbol = "⭐️";
+            }
+            else if (starRating >= 4 && starRating <= 6)
+            {
+                starSymbol = "🌟";
+            }
+            else if (starRating >= 7 && starRating <= 9)
+            {
+                starSymbol = "✨";
+            }
+            else if (starRating >= 10 && starRating <= 12)
+            {
+                starSymbol = "💫";
+            }
+            else if (starRating == 13)
+            {
+                starSymbol = "💎";
+            }
+
+            return new string(starSymbol[0], starRating);
         }
     }
 }
